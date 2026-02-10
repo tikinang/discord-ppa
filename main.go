@@ -39,8 +39,10 @@ func main() {
 	srv := NewServer(s3Client, signer)
 
 	server := &http.Server{
-		Addr:    cfg.ListenAddr,
-		Handler: srv.Handler(),
+		Addr:         cfg.ListenAddr,
+		Handler:      srv.Handler(),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 5 * time.Minute,
 	}
 
 	wg.Add(1)

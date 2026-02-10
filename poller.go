@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -18,6 +19,14 @@ type Poller struct {
 	cfg    *Config
 	s3     *S3Client
 	signer *GPGSigner
+}
+
+const maxDebSize = 512 * 1024 * 1024 // 512 MB
+
+var safeDebField = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.+~:\-]*$`)
+
+var httpClient = &http.Client{
+	Timeout: 5 * time.Minute,
 }
 
 func NewPoller(cfg *Config, s3 *S3Client, signer *GPGSigner) *Poller {
@@ -73,7 +82,7 @@ func (p *Poller) httpWithRetry(ctx context.Context, url, method string) (*http.R
 		if err != nil {
 			return nil, err
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -84,8 +93,8 @@ func (p *Poller) httpWithRetry(ctx context.Context, url, method string) (*http.R
 
 		wait := 30 * time.Second * time.Duration(1<<attempt)
 		if ra := resp.Header.Get("Retry-After"); ra != "" {
-			if secs, err := strconv.Atoi(ra); err == nil {
-				wait = time.Duration(secs) * time.Second
+			if secs, err := strconv.Atoi(ra); err == nil && secs > 0 {
+				wait = time.Duration(min(secs, 3600)) * time.Second
 			}
 		}
 		log.Printf("Rate limited (429), retry-after %v (attempt %d/3)", wait, attempt+1)
@@ -109,7 +118,7 @@ func (p *Poller) processNewVersion(ctx context.Context, etag string) error {
 		return fmt.Errorf("unexpected status %d downloading .deb", resp.StatusCode)
 	}
 
-	debData, err := io.ReadAll(resp.Body)
+	debData, err := io.ReadAll(io.LimitReader(resp.Body, maxDebSize))
 	if err != nil {
 		return fmt.Errorf("reading .deb: %w", err)
 	}
@@ -117,6 +126,10 @@ func (p *Poller) processNewVersion(ctx context.Context, etag string) error {
 	ctrl, err := ParseDebControl(bytes.NewReader(debData))
 	if err != nil {
 		return fmt.Errorf("parsing .deb: %w", err)
+	}
+
+	if !safeDebField.MatchString(ctrl.Package) || !safeDebField.MatchString(ctrl.Version) {
+		return fmt.Errorf("invalid package name %q or version %q", ctrl.Package, ctrl.Version)
 	}
 
 	filename := fmt.Sprintf("pool/d/discord/%s-%s.deb", ctrl.Package, ctrl.Version)

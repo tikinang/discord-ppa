@@ -32,6 +32,10 @@ func (s *Server) handleKeyGPG(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	key := strings.TrimPrefix(r.URL.Path, "/")
+	if strings.Contains(key, "..") {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
 
 	output, err := s.s3.GetObject(r.Context(), key)
 	if err != nil {
