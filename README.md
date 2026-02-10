@@ -2,7 +2,7 @@
 
 Unofficial APT repository for [Discord](https://discord.com/) on Linux.
 
-A Go app that polls Discord's download URL for new `.deb` releases, stores them in S3, generates GPG-signed APT metadata, and serves the repository over HTTP. Deployed at **[ppa.matejpavlicek.cz](https://ppa.matejpavlicek.cz)**.
+A Go app that polls Discord's download URL for new `.deb` releases, stores them in S3, generates GPG-signed APT metadata, and serves the repository over HTTPS. Deployed at **[ppa.matejpavlicek.cz](https://ppa.matejpavlicek.cz)**.
 
 ## Install Discord
 
@@ -75,6 +75,10 @@ Set the output as `GPG_PRIVATE_KEY`.
 ./verify.sh                        # against production
 ./verify.sh http://localhost:8080   # against local instance
 ```
+
+## Powered by Zerops
+
+This project runs on [Zerops](https://zerops.io) ❤️ — a dev-first cloud platform that handles infrastructure so you can focus on code.
 
 ## License
 
