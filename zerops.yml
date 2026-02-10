@@ -1,0 +1,23 @@
+zerops:
+  - setup: app
+    build:
+      os: ubuntu
+      base: go@latest
+      buildCommands:
+        - go build -o bin/discord-ppa
+      deployFiles:
+        - bin/discord-ppa
+      cache: true
+    run:
+      base: ubuntu@latest
+      ports:
+        - port: 8080
+          httpSupport: true
+      envVariables:
+        S3_ENDPOINT: ${storage_apiUrl}
+        S3_BUCKET: ${storage_bucketName}
+        S3_ACCESS_KEY: ${storage_accessKeyId}
+        S3_SECRET_KEY: ${storage_secretAccessKey}
+        LISTEN_ADDR: :8080
+        POLL_INTERVAL: 5m
+      start: ./bin/discord-ppa
