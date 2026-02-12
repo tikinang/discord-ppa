@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
-	"time"
+
+	"github.com/tikinang/discord-ppa/ppa"
 )
 
 func main() {
@@ -17,50 +17,57 @@ func main() {
 		log.Fatalf("Configuration error: %v", err)
 	}
 
-	signer, err := NewGPGSigner(cfg.GPGPrivateKey)
+	p, err := ppa.New(cfg.PPA)
 	if err != nil {
-		log.Fatalf("GPG error: %v", err)
+		log.Fatalf("PPA init error: %v", err)
 	}
 
-	s3Client := NewS3Client(cfg)
+	// Handle subcommands
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "delete":
+			if len(os.Args) < 3 {
+				fmt.Fprintf(os.Stderr, "Usage: %s delete <source-name>\n", os.Args[0])
+				os.Exit(1)
+			}
+			ctx := context.Background()
+			for _, name := range os.Args[2:] {
+				if err := p.DeleteSource(ctx, name); err != nil {
+					log.Fatalf("Error deleting source %q: %v", name, err)
+				}
+			}
+			return
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown command: %s\nUsage: %s [delete <source-name>]\n", os.Args[1], os.Args[0])
+			os.Exit(1)
+		}
+	}
+
+	if cfg.DiscordPollInterval > 0 {
+		p.Register(ppa.SourceRegistration{
+			Source:       NewDiscordSource(cfg.DiscordDownloadURL),
+			PollInterval: cfg.DiscordPollInterval,
+		})
+	}
+
+	if cfg.PostmanPollInterval > 0 {
+		p.Register(ppa.SourceRegistration{
+			Source:       NewPostmanSource(cfg.PostmanDownloadURL, cfg.PPA.Maintainer),
+			PollInterval: cfg.PostmanPollInterval,
+		})
+	}
+
+	if cfg.ZCLIGithubRepo != "" && cfg.ZCLIPollInterval > 0 {
+		p.Register(ppa.SourceRegistration{
+			Source:       NewZCLISource(cfg.ZCLIGithubRepo),
+			PollInterval: cfg.ZCLIPollInterval,
+		})
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	var wg sync.WaitGroup
-
-	poller := NewPoller(cfg, s3Client, signer)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		poller.Run(ctx)
-	}()
-
-	srv := NewServer(s3Client, signer)
-
-	server := &http.Server{
-		Addr:         cfg.ListenAddr,
-		Handler:      srv.Handler(),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 5 * time.Minute,
+	if err := p.Run(ctx); err != nil {
+		log.Fatalf("PPA error: %v", err)
 	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		<-ctx.Done()
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("HTTP server shutdown error: %v", err)
-		}
-	}()
-
-	log.Printf("Listening on %s", cfg.ListenAddr)
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("HTTP server error: %v", err)
-	}
-
-	wg.Wait()
-	log.Println("Shutdown complete")
 }

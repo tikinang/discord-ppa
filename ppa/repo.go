@@ -1,4 +1,4 @@
-package main
+package ppa
 
 import (
 	"bytes"
@@ -58,10 +58,10 @@ type FileHash struct {
 	SHA256 string
 }
 
-func GenerateReleaseFile(files []FileHash) []byte {
+func GenerateReleaseFile(origin, label string, files []FileHash) []byte {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "Origin: ppa.matejpavlicek.cz\n")
-	fmt.Fprintf(&buf, "Label: Discord PPA\n")
+	fmt.Fprintf(&buf, "Origin: %s\n", origin)
+	fmt.Fprintf(&buf, "Label: %s\n", label)
 	fmt.Fprintf(&buf, "Suite: stable\n")
 	fmt.Fprintf(&buf, "Codename: stable\n")
 	fmt.Fprintf(&buf, "Architectures: amd64\n")

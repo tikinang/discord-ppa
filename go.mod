@@ -7,7 +7,6 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
-	github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb
 	github.com/joho/godotenv v1.5.1
 )
 

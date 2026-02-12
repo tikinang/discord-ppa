@@ -1,4 +1,4 @@
-package main
+package ppa
 
 import (
 	"bytes"

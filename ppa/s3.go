@@ -1,4 +1,4 @@
-package main
+package ppa
 
 import (
 	"bytes"
@@ -17,19 +17,27 @@ type S3Client struct {
 	bucket string
 }
 
-func NewS3Client(cfg *Config) *S3Client {
-	endpoint := cfg.S3Endpoint
+type S3Config struct {
+	Endpoint  string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	Region    string
+}
+
+func NewS3Client(cfg S3Config) *S3Client {
+	endpoint := cfg.Endpoint
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
 		endpoint = "https://" + endpoint
 	}
 
 	client := s3.New(s3.Options{
-		Region:       cfg.S3Region,
+		Region:       cfg.Region,
 		BaseEndpoint: aws.String(endpoint),
-		Credentials:  credentials.NewStaticCredentialsProvider(cfg.S3AccessKey, cfg.S3SecretKey, ""),
+		Credentials:  credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, ""),
 		UsePathStyle: true,
 	})
-	return &S3Client{client: client, bucket: cfg.S3Bucket}
+	return &S3Client{client: client, bucket: cfg.Bucket}
 }
 
 func (s *S3Client) Upload(ctx context.Context, key string, data []byte, contentType string) error {
@@ -65,6 +73,17 @@ func (s *S3Client) GetObject(ctx context.Context, key string) (*s3.GetObjectOutp
 		Bucket: &s.bucket,
 		Key:    &key,
 	})
+}
+
+func (s *S3Client) Delete(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+	})
+	if err != nil {
+		return fmt.Errorf("deleting %s: %w", key, err)
+	}
+	return nil
 }
 
 func (s *S3Client) ListPrefix(ctx context.Context, prefix string) ([]string, error) {

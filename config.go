@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/tikinang/discord-ppa/ppa"
 )
 
 func init() {
@@ -15,50 +16,68 @@ func init() {
 	}
 }
 
-type Config struct {
-	DownloadURL   string
-	PollInterval  time.Duration
-	GPGPrivateKey string
-	S3Endpoint    string
-	S3Bucket      string
-	S3AccessKey   string
-	S3SecretKey   string
-	S3Region      string
-	ListenAddr    string
+type AppConfig struct {
+	PPA ppa.Config
+
+	DiscordDownloadURL  string
+	DiscordPollInterval time.Duration
+
+	PostmanDownloadURL  string
+	PostmanPollInterval time.Duration
+
+	ZCLIGithubRepo   string
+	ZCLIPollInterval time.Duration
 }
 
-func LoadConfig() (*Config, error) {
-	cfg := &Config{
-		DownloadURL:   getEnv("DOWNLOAD_URL", "https://discord.com/api/download?platform=linux&format=deb"),
-		GPGPrivateKey: os.Getenv("GPG_PRIVATE_KEY"),
-		S3Endpoint:    os.Getenv("S3_ENDPOINT"),
-		S3Bucket:      os.Getenv("S3_BUCKET"),
-		S3AccessKey:   os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey:   os.Getenv("S3_SECRET_KEY"),
-		S3Region:      getEnv("S3_REGION", "us-east-1"),
-		ListenAddr:    getEnv("LISTEN_ADDR", ":8080"),
+func LoadConfig() (*AppConfig, error) {
+	cfg := &AppConfig{
+		PPA: ppa.Config{
+			GPGPrivateKey: os.Getenv("GPG_PRIVATE_KEY"),
+			S3Endpoint:    os.Getenv("S3_ENDPOINT"),
+			S3Bucket:      os.Getenv("S3_BUCKET"),
+			S3AccessKey:   os.Getenv("S3_ACCESS_KEY"),
+			S3SecretKey:   os.Getenv("S3_SECRET_KEY"),
+			S3Region:      getEnv("S3_REGION", "us-east-1"),
+			ListenAddr:    getEnv("LISTEN_ADDR", ":8080"),
+			Origin:        getEnv("ORIGIN", "ppa.matejpavlicek.cz"),
+			Label:         getEnv("LABEL", "PPA"),
+			Maintainer:    getEnv("MAINTAINER", "PPA <ppa@matejpavlicek.cz>"),
+		},
+		DiscordDownloadURL: getEnv("DISCORD_DOWNLOAD_URL", ""),
+		PostmanDownloadURL: getEnv("POSTMAN_DOWNLOAD_URL", ""),
+		ZCLIGithubRepo:     getEnv("ZCLI_GITHUB_REPO", "zeropsio/zcli"),
 	}
 
-	interval := getEnv("POLL_INTERVAL", "1h")
-	d, err := time.ParseDuration(interval)
+	var err error
+
+	cfg.DiscordPollInterval, err = parseDuration("DISCORD_POLL_INTERVAL", "1h")
 	if err != nil {
-		return nil, fmt.Errorf("invalid POLL_INTERVAL %q: %w", interval, err)
+		return nil, err
 	}
-	cfg.PollInterval = d
 
-	if cfg.GPGPrivateKey == "" {
+	cfg.PostmanPollInterval, err = parseDuration("POSTMAN_POLL_INTERVAL", "6h")
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.ZCLIPollInterval, err = parseDuration("ZCLI_POLL_INTERVAL", "1h")
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.PPA.GPGPrivateKey == "" {
 		return nil, fmt.Errorf("GPG_PRIVATE_KEY is required")
 	}
-	if cfg.S3Endpoint == "" {
+	if cfg.PPA.S3Endpoint == "" {
 		return nil, fmt.Errorf("S3_ENDPOINT is required")
 	}
-	if cfg.S3Bucket == "" {
+	if cfg.PPA.S3Bucket == "" {
 		return nil, fmt.Errorf("S3_BUCKET is required")
 	}
-	if cfg.S3AccessKey == "" {
+	if cfg.PPA.S3AccessKey == "" {
 		return nil, fmt.Errorf("S3_ACCESS_KEY is required")
 	}
-	if cfg.S3SecretKey == "" {
+	if cfg.PPA.S3SecretKey == "" {
 		return nil, fmt.Errorf("S3_SECRET_KEY is required")
 	}
 
@@ -70,4 +89,13 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func parseDuration(envKey, fallback string) (time.Duration, error) {
+	raw := getEnv(envKey, fallback)
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", envKey, raw, err)
+	}
+	return d, nil
 }

@@ -1,4 +1,4 @@
-package main
+package ppa
 
 import (
 	"archive/tar"
@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/blakesmith/ar"
 )
 
 type DebControl struct {
@@ -29,10 +27,13 @@ type ControlField struct {
 }
 
 func ParseDebControl(r io.Reader) (*DebControl, error) {
-	arReader := ar.NewReader(r)
+	ar, err := newArReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("reading ar archive: %w", err)
+	}
 
 	for {
-		header, err := arReader.Next()
+		header, err := ar.next()
 		if err == io.EOF {
 			break
 		}
@@ -43,7 +44,7 @@ func ParseDebControl(r io.Reader) (*DebControl, error) {
 		name := strings.TrimRight(header.Name, "/ ")
 
 		if strings.HasPrefix(name, "control.tar") {
-			return parseControlTar(arReader, name)
+			return parseControlTar(ar, name)
 		}
 	}
 
