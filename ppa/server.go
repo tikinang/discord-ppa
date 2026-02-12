@@ -109,7 +109,7 @@ func (s *server) indexHTML() string {
 curl -fsSL https://ppa.matejpavlicek.cz/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/ppa.gpg
 
 # Add the repository
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ppa.gpg] https://ppa.matejpavlicek.cz stable main" | sudo tee /etc/apt/sources.list.d/ppa.list
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ppa.gpg] https://ppa.matejpavlicek.cz stable main" | sudo tee /etc/apt/sources.list.d/matej-pavlicek-ppa.list
 
 # Update and install
 sudo apt update
