@@ -3,7 +3,7 @@ package ppa
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -34,7 +34,7 @@ func HTTPWithRetry(ctx context.Context, url, method string) (*http.Response, err
 				wait = time.Duration(min(secs, 3600)) * time.Second
 			}
 		}
-		log.Printf("Rate limited (429), retry-after %v (attempt %d/3)", wait, attempt+1)
+		slog.Warn("Rate limited", "retry_after", wait, "attempt", attempt+1)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()

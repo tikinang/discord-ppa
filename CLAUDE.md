@@ -66,6 +66,7 @@ Optional:
 
 - `ORIGIN` (default: `ppa.matejpavlicek.cz`), `LABEL` (default: `PPA`)
 - `S3_REGION` (default: `us-east-1`), `LISTEN_ADDR` (default: `:8080`)
+- `LOG_LEVEL` (default: `INFO`, options: `DEBUG`, `INFO`, `WARN`, `ERROR`)
 - `DISCORD_DOWNLOAD_URL`, `DISCORD_POLL_INTERVAL` (default: `1h`)
 - `POSTMAN_DOWNLOAD_URL`, `POSTMAN_POLL_INTERVAL` (default: `6h`)
 - `ZCLI_GITHUB_REPO` (required to enable zCLI source), `ZCLI_POLL_INTERVAL` (default: `1h`)

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,14 +12,18 @@ import (
 )
 
 func main() {
+	SetupLogging()
+
 	cfg, err := LoadConfig()
 	if err != nil {
-		log.Fatalf("Configuration error: %v", err)
+		slog.Error("Configuration error", "error", err)
+		os.Exit(1)
 	}
 
 	p, err := ppa.New(cfg.PPA)
 	if err != nil {
-		log.Fatalf("PPA init error: %v", err)
+		slog.Error("PPA init error", "error", err)
+		os.Exit(1)
 	}
 
 	// Handle subcommands
@@ -33,7 +37,8 @@ func main() {
 			ctx := context.Background()
 			for _, name := range os.Args[2:] {
 				if err := p.DeleteSource(ctx, name); err != nil {
-					log.Fatalf("Error deleting source %q: %v", name, err)
+					slog.Error("Error deleting source", "source", name, "error", err)
+					os.Exit(1)
 				}
 			}
 			return
@@ -68,6 +73,7 @@ func main() {
 	defer cancel()
 
 	if err := p.Run(ctx); err != nil {
-		log.Fatalf("PPA error: %v", err)
+		slog.Error("PPA error", "error", err)
+		os.Exit(1)
 	}
 }

@@ -14,13 +14,14 @@ type sourceInfo struct {
 }
 
 type server struct {
-	s3      *S3Client
-	signer  *GPGSigner
-	sources []sourceInfo
+	s3         *S3Client
+	signer     *GPGSigner
+	sources    []sourceInfo
+	maintainer string
 }
 
-func newServer(s3 *S3Client, signer *GPGSigner, sources []sourceInfo) *server {
-	return &server{s3: s3, signer: signer, sources: sources}
+func newServer(s3 *S3Client, signer *GPGSigner, sources []sourceInfo, maintainer string) *server {
+	return &server{s3: s3, signer: signer, sources: sources, maintainer: maintainer}
 }
 
 func (s *server) handler() http.Handler {
@@ -66,6 +67,25 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, s.indexHTML())
 }
 
+// formatMaintainer parses "Name <email>" or bare email/URL into HTML.
+func formatMaintainer(m string) string {
+	// Try "Name <addr>" format
+	if start := strings.Index(m, "<"); start != -1 {
+		if end := strings.Index(m, ">"); end > start {
+			name := strings.TrimSpace(m[:start])
+			addr := m[start+1 : end]
+			if name == "" {
+				name = addr
+			}
+			if strings.Contains(addr, "@") {
+				return fmt.Sprintf(`<a href="mailto:%s">%s</a>`, html.EscapeString(addr), html.EscapeString(name))
+			}
+			return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(addr), html.EscapeString(name))
+		}
+	}
+	return html.EscapeString(m)
+}
+
 func (s *server) indexHTML() string {
 	var packageList strings.Builder
 	for _, src := range s.sources {
@@ -79,6 +99,7 @@ func (s *server) indexHTML() string {
 <body>
 <h1>PPA</h1>
 <p>Unofficial APT repository.</p>
+<p>Maintainer: ` + formatMaintainer(s.maintainer) + `</p>
 <h2>Available packages</h2>
 <dl>
 ` + packageList.String() + `</dl>

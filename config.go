@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -12,8 +13,23 @@ import (
 
 func init() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
+		slog.Debug("No .env file found, using environment variables")
 	}
+}
+
+func SetupLogging() {
+	var lvl slog.Level
+	switch strings.ToUpper(os.Getenv("LOG_LEVEL")) {
+	case "DEBUG":
+		lvl = slog.LevelDebug
+	case "WARN", "WARNING":
+		lvl = slog.LevelWarn
+	case "ERROR":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
 }
 
 type AppConfig struct {

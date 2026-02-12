@@ -7,7 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"sort"
@@ -78,7 +78,7 @@ func (p *PPA) Register(reg SourceRegistration) {
 // DeleteSource removes all pool files, metadata, and state for a source,
 // then regenerates repo metadata.
 func (p *PPA) DeleteSource(ctx context.Context, sourceName string) error {
-	log.Printf("[%s] Deleting source...", sourceName)
+	slog.Info("Deleting source", "source", sourceName)
 
 	// Find and delete all pool files referenced by this source's packages-entry
 	entryData, err := p.s3.Download(ctx, "meta/"+sourceName+"/packages-entry")
@@ -86,9 +86,9 @@ func (p *PPA) DeleteSource(ctx context.Context, sourceName string) error {
 		for _, line := range strings.Split(string(entryData), "\n") {
 			if strings.HasPrefix(line, "Filename: ") {
 				filename := strings.TrimPrefix(line, "Filename: ")
-				log.Printf("[%s] Deleting %s", sourceName, filename)
+				slog.Info("Deleting file", "source", sourceName, "file", filename)
 				if err := p.s3.Delete(ctx, filename); err != nil {
-					log.Printf("[%s] Warning: %v", sourceName, err)
+					slog.Warn("Failed to delete file", "source", sourceName, "file", filename, "error", err)
 				}
 			}
 		}
@@ -99,9 +99,9 @@ func (p *PPA) DeleteSource(ctx context.Context, sourceName string) error {
 		"meta/" + sourceName + "/packages-entry",
 		"meta/" + sourceName + "/state",
 	} {
-		log.Printf("[%s] Deleting %s", sourceName, key)
+		slog.Info("Deleting meta", "source", sourceName, "key", key)
 		if err := p.s3.Delete(ctx, key); err != nil {
-			log.Printf("[%s] Warning: %v", sourceName, err)
+			slog.Warn("Failed to delete meta", "source", sourceName, "key", key, "error", err)
 		}
 	}
 
@@ -113,7 +113,7 @@ func (p *PPA) DeleteSource(ctx context.Context, sourceName string) error {
 		return fmt.Errorf("regenerating repo metadata: %w", err)
 	}
 
-	log.Printf("[%s] Source deleted successfully", sourceName)
+	slog.Info("Source deleted successfully", "source", sourceName)
 	return nil
 }
 
@@ -126,7 +126,7 @@ func (p *PPA) Run(ctx context.Context) error {
 		})
 	}
 
-	srv := newServer(p.s3, p.signer, sources)
+	srv := newServer(p.s3, p.signer, sources, p.cfg.Maintainer)
 	server := &http.Server{
 		Addr:         p.cfg.ListenAddr,
 		Handler:      srv.handler(),
@@ -151,23 +151,23 @@ func (p *PPA) Run(ctx context.Context) error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("HTTP server shutdown error: %v", err)
+			slog.Error("HTTP server shutdown error", "error", err)
 		}
 	}()
 
-	log.Printf("Listening on %s", p.cfg.ListenAddr)
+	slog.Info("Listening", "addr", p.cfg.ListenAddr)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		return fmt.Errorf("HTTP server error: %w", err)
 	}
 
 	wg.Wait()
-	log.Println("Shutdown complete")
+	slog.Info("Shutdown complete")
 	return nil
 }
 
 func (p *PPA) runPoller(ctx context.Context, reg SourceRegistration) {
 	name := reg.Source.Name()
-	log.Printf("[%s] Starting poller (interval: %v)", name, reg.PollInterval)
+	slog.Info("Starting poller", "source", name, "interval", reg.PollInterval)
 
 	p.poll(ctx, reg)
 
@@ -186,30 +186,30 @@ func (p *PPA) runPoller(ctx context.Context, reg SourceRegistration) {
 
 func (p *PPA) poll(ctx context.Context, reg SourceRegistration) {
 	name := reg.Source.Name()
-	log.Printf("[%s] Polling for new version...", name)
+	slog.Debug("Polling for new version", "source", name)
 
 	state, err := reg.Source.Check(ctx)
 	if err != nil {
-		log.Printf("[%s] Check failed: %v", name, err)
+		slog.Error("Check failed", "source", name, "error", err)
 		return
 	}
 
 	lastState, err := p.s3.Download(ctx, "meta/"+name+"/state")
 	if err == nil && string(lastState) == state && state != "" {
-		log.Printf("[%s] No new version detected", name)
+		slog.Debug("No new version detected", "source", name)
 		return
 	}
 
-	log.Printf("[%s] New version detected, fetching...", name)
+	slog.Info("New version detected, fetching", "source", name)
 
 	debData, err := reg.Source.Fetch(ctx)
 	if err != nil {
-		log.Printf("[%s] Fetch failed: %v", name, err)
+		slog.Error("Fetch failed", "source", name, "error", err)
 		return
 	}
 
 	if err := p.processNewDeb(ctx, name, state, debData); err != nil {
-		log.Printf("[%s] Error processing new version: %v", name, err)
+		slog.Error("Error processing new version", "source", name, "error", err)
 	}
 }
 
@@ -234,7 +234,7 @@ func (p *PPA) processNewDeb(ctx context.Context, sourceName, state string, debDa
 	sha1sum := fmt.Sprintf("%x", sha1.Sum(debData))
 	sha256sum := fmt.Sprintf("%x", sha256.Sum256(debData))
 
-	log.Printf("[%s] Uploading %s (%d bytes)", sourceName, filename, len(debData))
+	slog.Info("Uploading package", "source", sourceName, "file", filename, "bytes", len(debData))
 	if err := p.s3.Upload(ctx, filename, debData, "application/vnd.debian.binary-package"); err != nil {
 		return fmt.Errorf("uploading .deb: %w", err)
 	}
@@ -270,7 +270,7 @@ func (p *PPA) processNewDeb(ctx context.Context, sourceName, state string, debDa
 		}
 	}
 
-	log.Printf("[%s] Successfully processed %s version %s", sourceName, ctrl.Package, ctrl.Version)
+	slog.Info("Successfully processed", "source", sourceName, "package", ctrl.Package, "version", ctrl.Version)
 	return nil
 }
 
@@ -289,7 +289,7 @@ func (p *PPA) regenerateRepoMetadata(ctx context.Context) error {
 		}
 		data, err := p.s3.Download(ctx, key)
 		if err != nil {
-			log.Printf("Warning: failed to download %s: %v", key, err)
+			slog.Warn("Failed to download packages entry", "key", key, "error", err)
 			continue
 		}
 		if len(data) > 0 {
